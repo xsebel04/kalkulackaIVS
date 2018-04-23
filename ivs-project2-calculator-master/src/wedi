@@ -1,5 +1,5 @@
 #!/bin/bash
-
+#pridano wedi
 export POSIXLY_CORRECT=yes
 
 realpathTest=$(realpath . > /dev/null 2>&1)
