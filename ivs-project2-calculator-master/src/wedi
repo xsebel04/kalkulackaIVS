@@ -1,0 +1,240 @@
+#!/bin/bash
+
+export POSIXLY_CORRECT=yes
+
+realpathTest=$(realpath . > /dev/null 2>&1)
+
+#realpath utility test
+if [ $? -ne 0 ]; then
+  echo "Error: realpath doesn't work" >&2 
+fi
+
+myPath=$(realpath .)
+arg="${1}"
+
+#test if $WEDI_RC is empty
+if [ -z $WEDI_RC ]; then
+  echo 'Error: $WEDI_RC is empty' >&2
+fi
+
+# function for editing files 
+# code is repeating in few places so i decided take it to one func and call it from places where i need to edit files
+editFile() 
+{
+  if [[ -z $EDITOR ]]; then
+      if [[ -z $VISUAL ]]; then
+        vi ${arg}  
+      else
+        $VISUAL ${arg}
+        
+      fi
+  else
+    $EDITOR ${arg}
+  fi 
+  echo "$(basename ${arg})_$(date +%Y:%m:%d)_$(realpath ${arg})" >> $WEDI_RC
+}
+
+# if wedi is called without args
+if [[ $# -eq 0 ]]; then
+  temp=`grep "$myPath/[^/]*$" "$WEDI_RC" | awk '{a[i++]=$0} END {for (j=i-1; j>=0;) print a[j--] }' |cut -f3 -d '_'`
+  for i in $temp ; do
+    if [[ -f $i ]]; then
+      arg="$i"
+      break
+    fi
+  done
+  if [[ -z $arg ]]; then
+    echo "Error: didn't find the file"
+  else
+    editFile
+  fi
+fi
+
+# testing file or directory
+if [[ $# -eq 1 ]]; then
+
+  if [[ -f ${arg} ]]; then
+    editFile
+  elif [[ -d ${arg} ]]; then
+    myPath=${1}                             # sort -r sed -n '1!G;h;$p'
+    temp=`grep "$myPath/[^/]*$" "$WEDI_RC" | awk '{a[i++]=$0} END {for (j=i-1; j>=0;) print a[j--] }' | cut -f3 -d '_' | sed -e 1b`
+
+    for i in $temp ; do
+      if [[ -f $i ]]; then
+        arg="$i"
+        break
+      fi
+    done
+
+    if [[ -z ${arg} ]]; then
+      echo "Error: file is not openable1"
+      exit 1
+    else
+      editFile
+    fi
+  elif [[ $arg != "-l" && $arg != "-m" && $arg != "-b" && $arg != "-a" ]]; then
+    #statements
+    myPath=$(realpath .)
+    temp=`grep "$myPath/${1}*$" "$WEDI_RC" | wc -l`
+
+    if [[ temp -eq 0 ]]; then
+      editFile
+    fi
+  fi
+fi
+
+mvar=false
+lvar=false
+bvar=false
+avar=false
+
+# i had to manually set var OPTIND, because my ubuntu processed getopts only for the first time i executed wedi because of some return value stored in OPTIND
+OPTIND=""
+# function getopts for parsing options
+while getopts "mlab" o; 
+do
+  case "${o}" in
+    m) 
+    if [[ $# -eq 1 ]]; then
+    myPath=$(realpath .)
+    item=`grep "$myPath/[^/]*$" "$WEDI_RC" | cut -f3 -d'_' | sort -r | uniq -c | awk '{print $2}'`
+
+    for i in $item; do
+      if [[ -f $i ]]; then
+        arg="$i"
+        break
+      fi
+    done
+    if [[ -z $arg ]]; then
+      echo "Error: didn't find the file"
+    else
+      editFile
+    fi
+  elif [[ $# -eq 2 ]]; then
+    myPath=${2}
+    item=`grep "$myPath/[^/]*$" "$WEDI_RC" | cut -f3 -d'_' | sort -r | uniq -c | awk '{print $2}'`
+
+    for i in $item; do
+      if [[ -f $i ]]; then
+        arg="$i"
+        break
+      fi
+    done
+    if [[ -z $arg ]]; then
+      echo "Error: didn't find the file"
+    else
+      editFile
+    fi
+  fi 
+        ;;
+    l) lvar=true
+    if [[ $# -eq 1 ]]; then
+    
+    myPath=$(realpath .)
+    item=`grep "$myPath/[^/]*$" "$WEDI_RC" | cut -f3 -d'_' | sort -r | uniq -c | awk '{print $2}'`
+
+    for i in $item; do
+        arg=${i##*/}
+        echo $arg
+    done
+
+  elif [[ $# -eq 2 ]]; then
+
+    myPath=${2}
+    item=`grep "$myPath/[^/]*$" "$WEDI_RC" | cut -f3 -d'_' | sort -r | uniq -c | awk '{print $2}'`
+
+    for i in $item; do
+        arg=${i##*/}
+        echo $arg
+    done
+  fi
+        ;;
+    a) avar=true
+    if [[ $# -eq 1 ]]; then
+    echo "Error: required date format YYYY:MM:DD" >&2
+  elif [[ $# -eq 2 ]]; then 
+    myPath=$(realpath .)
+    myDate=`echo "$2" | sed "s/://g"`
+    item=`grep "$myPath/[^/]*$" "$WEDI_RC" | sort`
+    oldName="oldNameIsReallyBoring"
+
+    for tmp in $item ; do
+      modDate=`echo ${tmp} | cut -f2 -d'_' | sed "s/://g"`
+      if [[ $modDate -ge $myDate ]] ; then
+        newName=`echo "$tmp" | cut -f1 -d'_'`
+        if [[ "$newName" != "$oldName" ]]; then
+          oldName="$newName"
+          echo "$newName"
+
+        fi
+      fi
+    done
+
+    elif [[ $# -eq 3 ]]; then
+    myPath=${3}
+    myDate=`echo "$2" | sed "s/://g"`
+    item=`grep "$myPath/[^/]*$" "$WEDI_RC" | sort`
+    oldName="oldNameIsReallyBoring"
+
+    for tmp in $item ; do
+      modDate=`echo ${tmp} | cut -f2 -d'_' | sed "s/://g"`
+      if [[ $modDate -ge $myDate ]] ; then
+        newName=`echo "$tmp" | cut -f1 -d'_'`
+        if [[ "$newName" != "$oldName" ]]; then
+          oldName="$newName"
+          echo "$newName"
+
+        fi
+      fi
+    done
+
+  elif [[ $# -gt 3 ]]; then
+     echo "Error: too much arguments"
+  fi
+        ;;
+    b) bvar=true 
+    if [[ $# -eq 1 ]]; then
+    echo "Error: required date format YYYY:MM:DD" >&2
+  elif [[ $# -eq 2 ]]; then 
+
+    myDate=`echo "$2" | sed "s/://g"`
+    myPath=$(realpath .)
+    
+    item=`grep "$myPath/[^/]*$" "$WEDI_RC" | sort`
+    oldName="oldNameIsReallyBoring"
+
+    for tmp in $item ; do
+      modDate=`echo ${tmp} | cut -f2 -d'_' | sed "s/://g"`
+      if [[ $modDate -le $myDate ]] ; then
+        newName=`echo "$tmp" | cut -f1 -d'_'`
+        if [[ "$newName" != "$oldName" ]]; then
+          oldName="$newName"
+          echo "$newName"
+        fi
+      fi
+    done
+
+  elif [[ $# -eq 3 ]]; then
+
+    myDate=`echo "$2" | sed "s/://g"`
+    myPath=${3}
+
+    item=`grep "$myPath/[^/]*$" "$WEDI_RC" | sort`
+    oldName="oldNameIsReallyBoring"
+
+    for tmp in $item ; do
+      modDate=`echo ${tmp} | cut -f2 -d'_' | sed "s/://g"`
+      if [[ $modDate -le $myDate ]] ; then
+        newName=`echo "$tmp" | cut -f1 -d'_'`
+        if [[ "$newName" != "$oldName" ]]; then
+          oldName="$newName"
+          echo "$newName"
+        fi
+      fi
+    done
+  elif [[ $# -gt 3 ]]; then
+     echo "Error: too much arguments"
+  fi
+        ;;
+  esac
+done
